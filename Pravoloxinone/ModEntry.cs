@@ -6,10 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
-using StardewModdingAPI.Enums;
 using StardewValley;
 using HarmonyLib;
-using System.Threading;
 using StardewValley.Buffs;
 using StardewValley.Extensions;
 using StardewModdingAPI.Utilities;
@@ -22,14 +20,50 @@ namespace Pravoloxinone
         private static readonly string[] debuffs = { "12", "14", "17", "25", "26", "27" };
         private static IMonitor monitor;
         private static IModHelper helper;
+        private static ModConfig staticconfig;
         public static readonly PerScreen<bool> deathbypravoloxinone = new PerScreen<bool>();
+        internal ModConfig config;
+
+        /// <summary>The mod entry point, called after the mod is first loaded.</summary>
+        /// <param name="helper">Provides simplified APIs for writing mods.</param>
         public override void Entry(IModHelper helper)
         {
+           
+            this.Helper.Events.Content.AssetRequested += this.AssetRequested;
+            this.Helper.Events.GameLoop.GameLaunched += this.GameLaunched;
+            this.Helper.Events.GameLoop.SaveLoaded += this.SaveLoaded;
+            i18n.gethelpers(helper.Translation);
+
+            try
+            {
+                this.config = this.Helper.ReadConfig<ModConfig>();
+            }
+            catch
+            {
+                this.config = new ModConfig();
+                this.Monitor.Log("Failed to parse config file, default values will be used.", LogLevel.Warn);
+            }
+
+            staticconfig = this.config;
             monitor = this.Monitor;
             ModEntry.helper = this.Helper;
+            
+            var value = config.DebuffChance + config.BuffChance + config.DeathChance + config.DamageChance;
+            if (value > 0.999)
+            {
+                value = 1;
+            }
 
-            this.Helper.Events.Content.AssetRequested += this.AssetRequested;
-            i18n.gethelpers(helper.Translation);
+            if (value != 1)
+            {
+                this.Monitor.Log($"Effect chances in config file don't add to one, default values will be used.", LogLevel.Warn);
+                config.DebuffChance = 0.2f;
+                config.BuffChance = 0.65f;
+                config.DamageChance = 0.1f;
+                config.DeathChance = 0.05f;
+            }
+
+           
 
             var harmony = new Harmony(this.ModManifest.UniqueID);
 
@@ -45,12 +79,122 @@ namespace Pravoloxinone
             harmony.Patch(
                original: AccessTools.Method(typeof(Event), nameof(Event.exitEvent)),
                postfix: new HarmonyMethod(typeof(ModEntry), nameof(ModEntry.exitEvent_Postfix))
-         );
+          );
         }
 
+        /// <summary>
+        /// Raised after the game is launched, right before the first update tick. This happens once per game session (unrelated to loading saves). All mods are loaded and initialised at this point, so this is a good time to set up mod integrations.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void GameLaunched(object sender, GameLaunchedEventArgs e)
+        {
+            this.BuildConfigMenu();
+        }
+
+        /// <summary>
+        /// Creates the config menu for GMCM if installed
+        /// </summary>
+        private void BuildConfigMenu()
+        {
+            void ValidateConfig()
+            {
+                if (config.DebuffChance + config.BuffChance + config.DeathChance + config.DamageChance != 1.0f)
+                {
+                    this.Monitor.Log($"Effect chances in config file don't add to one, default values will be used.", LogLevel.Warn);
+                    config.DebuffChance = 0.2f;
+                    config.BuffChance = 0.65f;
+                    config.DamageChance = 0.10f;
+                    config.DeathChance = 0.05f;
+                }
+                this.Helper.WriteConfig(this.config);
+            }
+            // get Generic Mod Config Menu's API (if it's installed)
+            var configMenu = this.Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
+            if (configMenu is null) return;
+
+            // register mod
+            configMenu.Register(
+               mod: this.ModManifest,
+               reset: () => this.config = new ModConfig(),
+               save: () => ValidateConfig()
+           );
+            configMenu.AddParagraph(
+                ModManifest,
+                text: () => i18n.string_GMCM_ConfigReminder()
+                );
+            // add some config options
+            configMenu.AddNumberOption(
+                ModManifest,
+                name: () => i18n.string_GMCM_BuffChance(),
+                tooltip: () => i18n.string_GMCM_BuffChanceTooltip(),
+                min: 0f,
+                max: 1.0f,
+                interval: 0.025f,
+                getValue: () => config.BuffChance,
+                setValue: value => config.BuffChance = value
+            );
+            configMenu.AddNumberOption(
+                ModManifest,
+                name: () => i18n.string_GMCM_DebuffChance(),
+                tooltip: () => i18n.string_GMCM_DebuffChanceTooltip(),
+                min: 0f,
+                max: 1.0f,
+                interval: 0.025f,
+                getValue: () => config.DebuffChance,
+                setValue: value => config.DebuffChance = value
+            );
+            configMenu.AddNumberOption(
+                ModManifest,
+                name: () => i18n.string_GMCM_DamageChance(),
+                tooltip: () => i18n.string_GMCM_DamageChanceTooltip(),
+                min: 0f,
+                max: 1.0f,
+                interval: 0.025f,
+                getValue: () => config.DamageChance,
+                setValue: value => config.DamageChance = value
+            );
+            configMenu.AddNumberOption(
+               ModManifest,
+               name: () => i18n.string_GMCM_DeathChance(),
+               tooltip: () => i18n.string_GMCM_DeathChanceTooltip(),
+               min: 0f,
+               max: 1.0f,
+               interval: 0.025f,
+               getValue: () => config.DeathChance,
+               setValue: value => config.DeathChance = value
+           );
+
+        }
+
+        /// <summary>
+        /// Raised after loading a save (including the first day after creating a new save), or connecting to a multiplayer world. This happens right before DayStarted; at this point the save file is read and Context.IsWorldReady is true. This event isn't raised after saving; if you want to do something at the start of each day, see DayStarted instead.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void SaveLoaded(object sender, SaveLoadedEventArgs e)
+        {
+            if (Game1.player.eventsSeen.Contains("57") == true && Game1.player.mailbox.Contains("PravoloxinoneRecipe") == false)
+            {
+                if (Game1.player.mailReceived.Contains("PravoloxinoneRecipe") == false)
+                {
+                    Game1.player.mailReceived.Add("PravoloxinoneRecipe");
+                }
+
+                if (Game1.player.craftingRecipes.ContainsKey(i18n.string_Pravoloxinone()) == false)
+                {
+                    Game1.player.craftingRecipes.Add(i18n.string_Pravoloxinone(), 0);
+                }                               
+            }
+        }
+
+        /// <summary>
+        /// Raised when an asset is being requested from the content pipeline. The asset isn't necessarily being loaded yet (e.g. the game may be checking if it exists). You can register the changes you want to apply using the event arguments below; they'll be applied when the asset is actually loaded. See the content API for more info. If the asset is requested multiple times in the same tick (e.g.once to check if it exists and once to load it), SMAPI might only raise the event once and reuse the cached result.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void AssetRequested(object sender, AssetRequestedEventArgs e)
         {
-
             if (e.NameWithoutLocale.IsEquivalentTo("Data\\Objects"))
             {
                 e.Edit(asset =>
@@ -122,6 +266,11 @@ namespace Pravoloxinone
             }
         } 
         
+        /// <summary>
+        /// Code to run before the game checks for events to play
+        /// </summary>
+        /// <param name="__instance">The location instance the player is in</param>
+        /// <returns>Whether the original code should run</returns>
         public static bool checkForEvents_Prefix(GameLocation __instance)
         {
             try
@@ -151,6 +300,10 @@ namespace Pravoloxinone
            
         }
 
+        /// <summary>
+        /// Code to run after an event has been skipped or concluded
+        /// </summary>
+        /// <param name="__instance">The event that just finished</param>
         public static void exitEvent_Postfix(Event __instance)
         {
             try
@@ -166,6 +319,10 @@ namespace Pravoloxinone
             }
         }
 
+        /// <summary>
+        /// Code to run after the player has consumed an item.
+        /// </summary>
+        /// <param name="__instance"></param>
         public static void doneEating_Postfix(Farmer __instance)
         {
             try
@@ -198,26 +355,11 @@ namespace Pravoloxinone
 
             var chanceofeffect = random.NextDouble();
 
-            // Is random number returned lower than 0.2?
-            if (chanceofeffect < 0.2)
+            if (chanceofeffect < staticconfig.BuffChance)
             {
-                // Yes, Apply a random debuff from the list, also randomly selected for 60 seconds
-                var applieddebuff = new Buff(random.ChooseFrom(debuffs))
-                {
-                    totalMillisecondsDuration = 60000,
-                    millisecondsDuration = 60000,
-                    source = i18n.string_Pravoloxinone(),
-                    displaySource = i18n.string_Pravoloxinone()
-                };
-                Game1.player.applyBuff(applieddebuff);
-            }
-
-            // Not lower than 0.3? Well is the returned number lower than 0.85?
-            else if (chanceofeffect < 0.85)
-            {
-                // Yes, apply a randomw buff to a randomly selected skill, of a random strength for 5 minutes
+                // Yes, apply a randomw buff to a randomly selected skill, of a random strength for 10 minutes
                 var whichbuff = random.Next(0, 10);
-                var buffstrength = random.Next(1, 4);
+                var buffstrength = random.Next(1, 5);
                 var buffeffect = new BuffEffects();
                 switch (whichbuff)
                 {
@@ -256,19 +398,27 @@ namespace Pravoloxinone
                 Game1.player.applyBuff(appliedbuff);
             }
 
-            // Not lower than 0.85? Well is the returned number less than to 0.95?
-            else if (chanceofeffect < 0.95)
+            else if (chanceofeffect < staticconfig.DebuffChance + staticconfig.BuffChance)
             {
-                // Yes, subtract a random amount of health between 10 and half of current health
-                var healthtolose = random.Next(10, Game1.player.health / 2);
-                // Lose determined health, or set health to 1 if player would die
-                Game1.player.health -= Math.Min(Game1.player.health - 1, healthtolose);
-                if (Game1.player.health <= 0)
+                // Yes, Apply a random debuff from the list, also randomly selected for 60 seconds
+                var applieddebuff = new Buff(random.ChooseFrom(debuffs))
                 {
-                    deathbypravoloxinone.Value = true;
-                }
+                    totalMillisecondsDuration = 60000,
+                    millisecondsDuration = 60000,
+                    source = i18n.string_Pravoloxinone(),
+                    displaySource = i18n.string_Pravoloxinone()
+                };
+                Game1.player.applyBuff(applieddebuff);
             }
-            // None? Alright...
+
+            else if (chanceofeffect < staticconfig.DebuffChance + staticconfig.BuffChance + staticconfig.DamageChance)
+            {
+                // Yes, subtract a random amount of health between 5 and 30 (22 added to compensate for health effect of drink)
+                var healthtolose = Game1.player.health == Game1.player.maxHealth ? random.Next(5, 30) : random.Next(27, 52);
+                // Lose determined health, or set health to 1 if player would die
+                Game1.player.health = Math.Max(1, Game1.player.health - healthtolose);
+            }
+
             else
             {
                 // Yes, kill player

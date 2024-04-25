@@ -43,6 +43,42 @@ namespace Pravoloxinone
         {
             return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/HarveyMail");
         }
+        public static string string_GMCM_BuffChance()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_BuffChance");
+        }
+        public static string string_GMCM_DebuffChance()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_DebuffChance");
+        }
+        public static string string_GMCM_DamageChance()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_DamageChance");
+        }
+        public static string string_GMCM_DeathChance()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_DeathChance");
+        }
+        public static string string_GMCM_BuffChanceTooltip()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_BuffChanceTooltip");
+        }
+        public static string string_GMCM_DebuffChanceTooltip()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_DebuffChanceTooltip");
+        }
+        public static string string_GMCM_DamageChanceTooltip()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_DamageChanceTooltip");
+        }
+        public static string string_GMCM_DeathChanceTooltip()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_DeathChanceTooltip");
+        }
+        public static string string_GMCM_ConfigReminder()
+        {
+            return i18n.GetTranslation("TheMightyAmondee.Pravoloxinone/GMCM_ConfigReminder");
+        }
 
         /// <summary>
         /// Gets the correct translation
