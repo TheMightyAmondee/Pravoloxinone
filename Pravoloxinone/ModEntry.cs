@@ -379,7 +379,7 @@ namespace Pravoloxinone
                         buffeffect.ForagingLevel.Value = buffstrength;
                         break;
                     case 5:
-                        buffeffect.MaxStamina.Value = buffstrength;
+                        buffeffect.MaxStamina.Value = buffstrength * 20;
                         break;
                     case 6:
                         buffeffect.MagneticRadius.Value = buffstrength;
